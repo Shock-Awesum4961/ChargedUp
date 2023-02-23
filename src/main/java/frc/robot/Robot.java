@@ -19,6 +19,7 @@ import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.TimedRobot;
+import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj.drive.MecanumDrive;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -52,7 +53,11 @@ public class Robot extends TimedRobot {
   private static final String k_AutonYesCharger = "Yes Charger";
   private static final String k_AutonNoCharger = "No Charger";
 
-  private Joystick driverJoystick;
+  // private XboxController driverJoystick;
+  // private XboxController operatorJoystick;
+
+  private XboxController driverController;
+  private XboxController operatorController;
 
   private MecanumDrive m_robotDrive;
   private static final NeutralMode B_MODE = NeutralMode.Brake; // Set the talons neutralmode to brake
@@ -61,7 +66,29 @@ public class Robot extends TimedRobot {
   private static final int kRearLeftChannel = 2;
   private static final int kRearRightChannel = 3;
   private static final int kFrontRightChannel = 4;
+  
+  private static final int talon1Channel = 5;
+  private static final int talon2Channel = 6;
+  private static final int talon3Channel = 7;
+
+
   private static final int driverJoystickChannel = 0;
+  private static final int operatorJoystickChannel = 1;
+
+  private static final int a_button = 1;
+  private static final int b_button = 2;
+  private static final int x_button = 3;
+  private static final int y_button = 4;
+  
+  private static final int lb_button = 5;
+  private static final int rb_button = 6;
+  // private static final int lt_button = 7;
+  // private static final int rt_button = 8;
+  
+  private static final int select_button = 7;
+  private static final int start_button = 8;
+
+  
 
 
   //Limelight
@@ -93,20 +120,17 @@ public class Robot extends TimedRobot {
     m_AutonChargerChooser.addOption("Yes Charger", k_AutonYesCharger);
     SmartDashboard.putData("Auto Charger Choice", m_AutonChargerChooser);
 
-    driverJoystick = new Joystick(driverJoystickChannel);
+    driverController = new XboxController(driverJoystickChannel);
+    operatorController = new XboxController(operatorJoystickChannel);
 
-
-    //CHange from Talons to SparkMaxs/Neos
-    // WPI_TalonSRX frontLeft = new WPI_TalonSRX(kFrontLeftChannel);//  
-    // WPI_TalonSRX rearLeft = new WPI_TalonSRX(kRearLeftChannel);// 
-    // WPI_TalonSRX frontRight = new WPI_TalonSRX(kFrontRightChannel);// 
-    // WPI_TalonSRX rearRight = new WPI_TalonSRX(kRearRightChannel);// 
-
-    CANSparkMax frontLeft = new CANSparkMax(1, MotorType.kBrushless);;
-    CANSparkMax rearLeft = new CANSparkMax(2, MotorType.kBrushless);;
-    CANSparkMax rearRight = new CANSparkMax(3, MotorType.kBrushless);;
-    CANSparkMax frontRight = new CANSparkMax(4, MotorType.kBrushless);;
-
+    CANSparkMax frontLeft = new CANSparkMax(kFrontLeftChannel, MotorType.kBrushless);;
+    CANSparkMax rearLeft = new CANSparkMax(kRearLeftChannel, MotorType.kBrushless);;
+    CANSparkMax rearRight = new CANSparkMax(kRearRightChannel, MotorType.kBrushless);;
+    CANSparkMax frontRight = new CANSparkMax(kFrontRightChannel, MotorType.kBrushless);;
+    
+    WPI_TalonSRX talon1 = new WPI_TalonSRX(talon1Channel);// 
+    WPI_TalonSRX talon2 = new WPI_TalonSRX(talon2Channel);// 
+    WPI_TalonSRX talon3 = new WPI_TalonSRX(talon3Channel);// 
 
     frontLeft.setInverted(false);
     rearLeft.setInverted(false);
@@ -119,7 +143,6 @@ public class Robot extends TimedRobot {
     // frontRight.setNeutralMode(B_MODE);
     // rearRight.setNeutralMode(B_MODE);
     // flyWheelMotor.setNeutralMode(C_MODE);
-
 
     m_robotDrive = new MecanumDrive(frontLeft, rearLeft, frontRight, rearRight);
     m_robotDrive.setDeadband(0.2);
@@ -216,12 +239,18 @@ public class Robot extends TimedRobot {
   /** This function is called periodically during operator control. */
   @Override
   public void teleopPeriodic() {
-    if(driverJoystick.getY() < .1 && driverJoystick.getY() > -.1){
-      m_robotDrive.driveCartesian(driverJoystick.getY(), -driverJoystick.getX()/2,  -driverJoystick.getRawAxis(4)/2);
+    if(driverController.getLeftY() < .1 && driverController.getLeftY() > -.1){
+      m_robotDrive.driveCartesian(driverController.getLeftY(), -driverController.getLeftX()/2,  -driverController.getRightX()/2);
     }else{
-      m_robotDrive.driveCartesian(driverJoystick.getY(), -driverJoystick.getX(),  -driverJoystick.getRawAxis(4)/2);
+      m_robotDrive.driveCartesian(driverController.getLeftY(), -driverController.getLeftX(),  -driverController.getRightX()/2);
 
     }
+    // if(driverJoystick.getY() < .1 && driverJoystick.getY() > -.1){
+    //   m_robotDrive.driveCartesian(driverJoystick.getY(), -driverJoystick.getX()/2,  -driverJoystick.getRawAxis(4)/2);
+    // }else{
+    //   m_robotDrive.driveCartesian(driverJoystick.getY(), -driverJoystick.getX(),  -driverJoystick.getRawAxis(4)/2);
+
+    // }
 
   }
 
