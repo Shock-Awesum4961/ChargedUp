@@ -16,6 +16,7 @@ import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.networktables.NetworkTableInstance;
+import edu.wpi.first.wpilibj.DigitalInput;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.TimedRobot;
@@ -62,6 +63,9 @@ public class Robot extends TimedRobot {
   private MecanumDrive m_robotDrive;
   private static final NeutralMode B_MODE = NeutralMode.Brake; // Set the talons neutralmode to brake
 
+  private static final double defaultSpeed = 0.9;
+  private static final double armExtendedSpeed = 0.3;
+
   private static final int kFrontLeftChannel = 1; // TODO:: CHANGE THESE FROM LAST YEAR
   private static final int kRearLeftChannel = 2;
   private static final int kRearRightChannel = 3;
@@ -88,6 +92,9 @@ public class Robot extends TimedRobot {
   private static final int select_button = 7;
   private static final int start_button = 8;
 
+  //Limit switches ()
+  DigitalInput tempSwitch1 = new DigitalInput(0);
+  DigitalInput tempSwitch2 = new DigitalInput(1);
   
 
 
