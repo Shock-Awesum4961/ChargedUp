@@ -92,9 +92,20 @@ public class Robot extends TimedRobot {
   private static final int select_button = 7;
   private static final int start_button = 8;
 
-  //Limit switches ()
+  //Limit switches/
+  /*
+   * Limit claw open/close
+   * Limit Arm turn
+   * Limit arm extend
+   * 
+   * switch at certain lengths to place game pieces
+   */
   DigitalInput tempSwitch1 = new DigitalInput(0);
   DigitalInput tempSwitch2 = new DigitalInput(1);
+  DigitalInput tempSwitch3 = new DigitalInput(2);
+  DigitalInput tempSwitch4 = new DigitalInput(3);
+  DigitalInput tempSwitch5 = new DigitalInput(4);
+  DigitalInput tempSwitch6 = new DigitalInput(5);
   
 
 
