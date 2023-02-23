@@ -8,6 +8,10 @@ import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
 
+import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableEntry;
@@ -22,6 +26,8 @@ import edu.wpi.first.wpilibj.SPI;
 import com.kauailabs.navx.frc.AHRS;
 import com.ctre.phoenix.motorcontrol.NeutralMode;
 import com.ctre.phoenix.motorcontrol.can.WPI_TalonSRX;
+import com.revrobotics.CANSparkMax;
+import com.revrobotics.CANSparkMaxLowLevel.MotorType;
 
 
 /**
@@ -33,26 +39,28 @@ import com.ctre.phoenix.motorcontrol.can.WPI_TalonSRX;
 public class Robot extends TimedRobot {
   AHRS ahrs;
   Joystick stick;
+
   private static final String kDefaultAuto = "Default";
-  private static final String kCustomAuto = "My Auto";
+  private static final String kCustomAuto = "MyAuto";
+
   private String m_autoSelected;
   private String m_autoChargerSelected;
+
   private final SendableChooser<String> m_AutonChooser = new SendableChooser<>();
   private final SendableChooser<String> m_AutonChargerChooser = new SendableChooser<>();
 
   private static final String k_AutonYesCharger = "Yes Charger";
   private static final String k_AutonNoCharger = "No Charger";
 
-
   private Joystick driverJoystick;
 
   private MecanumDrive m_robotDrive;
   private static final NeutralMode B_MODE = NeutralMode.Brake; // Set the talons neutralmode to brake
 
-  private static final int kFrontLeftChannel = 12; // TODO:: CHANGE THESE FROM LAST YEAR
-  private static final int kRearLeftChannel = 14;
-  private static final int kFrontRightChannel = 22;
-  private static final int kRearRightChannel = 20;
+  private static final int kFrontLeftChannel = 1; // TODO:: CHANGE THESE FROM LAST YEAR
+  private static final int kRearLeftChannel = 2;
+  private static final int kRearRightChannel = 3;
+  private static final int kFrontRightChannel = 4;
   private static final int driverJoystickChannel = 0;
 
 
@@ -87,24 +95,34 @@ public class Robot extends TimedRobot {
 
     driverJoystick = new Joystick(driverJoystickChannel);
 
-    WPI_TalonSRX frontLeft = new WPI_TalonSRX(kFrontLeftChannel);//  
-    WPI_TalonSRX rearLeft = new WPI_TalonSRX(kRearLeftChannel);// 
-    WPI_TalonSRX frontRight = new WPI_TalonSRX(kFrontRightChannel);// 
-    WPI_TalonSRX rearRight = new WPI_TalonSRX(kRearRightChannel);// 
 
-    frontRight.setInverted(true); 
-    rearRight.setInverted(true);
+    //CHange from Talons to SparkMaxs/Neos
+    // WPI_TalonSRX frontLeft = new WPI_TalonSRX(kFrontLeftChannel);//  
+    // WPI_TalonSRX rearLeft = new WPI_TalonSRX(kRearLeftChannel);// 
+    // WPI_TalonSRX frontRight = new WPI_TalonSRX(kFrontRightChannel);// 
+    // WPI_TalonSRX rearRight = new WPI_TalonSRX(kRearRightChannel);// 
+
+    CANSparkMax frontLeft = new CANSparkMax(1, MotorType.kBrushless);;
+    CANSparkMax rearLeft = new CANSparkMax(2, MotorType.kBrushless);;
+    CANSparkMax rearRight = new CANSparkMax(3, MotorType.kBrushless);;
+    CANSparkMax frontRight = new CANSparkMax(4, MotorType.kBrushless);;
+
+
     frontLeft.setInverted(false);
     rearLeft.setInverted(false);
+    rearRight.setInverted(true);
+    frontRight.setInverted(true); 
 
-    frontLeft.setNeutralMode(B_MODE);
-    rearLeft.setNeutralMode(B_MODE);
-    frontRight.setNeutralMode(B_MODE);
-    rearRight.setNeutralMode(B_MODE);
+    // Netrual mode is HARDWARE on Sparkma
+    // frontLeft.setNeutralMode(B_MODE);
+    // rearLeft.setNeutralMode(B_MODE);
+    // frontRight.setNeutralMode(B_MODE);
+    // rearRight.setNeutralMode(B_MODE);
     // flyWheelMotor.setNeutralMode(C_MODE);
 
 
     m_robotDrive = new MecanumDrive(frontLeft, rearLeft, frontRight, rearRight);
+    m_robotDrive.setDeadband(0.2);
 
     try {
 			/***********************************************************************
@@ -190,12 +208,20 @@ public class Robot extends TimedRobot {
 
   /** This function is called once when teleop is enabled. */
   @Override
-  public void teleopInit() {}
+  public void teleopInit() {
+    m_robotDrive.setMaxOutput(.9); 
+
+  }
 
   /** This function is called periodically during operator control. */
   @Override
   public void teleopPeriodic() {
-    m_robotDrive.driveCartesian(driverJoystick.getY(), -driverJoystick.getX(),  -driverJoystick.getRawAxis(4));
+    if(driverJoystick.getY() < .1 && driverJoystick.getY() > -.1){
+      m_robotDrive.driveCartesian(driverJoystick.getY(), -driverJoystick.getX()/2,  -driverJoystick.getRawAxis(4)/2);
+    }else{
+      m_robotDrive.driveCartesian(driverJoystick.getY(), -driverJoystick.getX(),  -driverJoystick.getRawAxis(4)/2);
+
+    }
 
   }
 
@@ -238,4 +264,25 @@ public class Robot extends TimedRobot {
   public void autonPushCubeDriveOutCommunity(){}
 
   public void autonPlaceConeDriveOutCommunity(){}
+
+  public void targetAprilTag(int seekingTargetId){
+    NetworkTableEntry validTargets = table.getEntry("json ");
+    JSONParser parser = new JSONParser();
+    JSONObject masterObject;
+    ArrayList<Integer> displayTagArr = new ArrayList<>();
+    try {
+      masterObject = (JSONObject) parser.parse(validTargets.getString(""));
+
+      JSONObject resultsObject = (JSONObject) masterObject.get("Results");
+      JSONArray tagsArray = (JSONArray) resultsObject.get("Fiducial");
+      for(Object tag : tagsArray){
+        JSONObject jsonTag = (JSONObject) tag;
+        if(!(jsonTag instanceof JSONObject)){continue;}
+
+        int targetID = (int)jsonTag.get("fid");
+      }
+    } catch(Exception e){
+      throw new RuntimeException(e);
+    }
+  }
 }
