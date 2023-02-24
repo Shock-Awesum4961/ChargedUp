@@ -29,6 +29,7 @@ import com.kauailabs.navx.frc.AHRS;
 import com.ctre.phoenix.motorcontrol.NeutralMode;
 import com.ctre.phoenix.motorcontrol.can.WPI_TalonSRX;
 import com.revrobotics.CANSparkMax;
+import com.revrobotics.RelativeEncoder;
 import com.revrobotics.CANSparkMaxLowLevel.MotorType;
 
 
@@ -141,10 +142,15 @@ public class Robot extends TimedRobot {
     driverController = new XboxController(driverJoystickChannel);
     operatorController = new XboxController(operatorJoystickChannel);
 
-    CANSparkMax frontLeft = new CANSparkMax(kFrontLeftChannel, MotorType.kBrushless);;
-    CANSparkMax rearLeft = new CANSparkMax(kRearLeftChannel, MotorType.kBrushless);;
-    CANSparkMax rearRight = new CANSparkMax(kRearRightChannel, MotorType.kBrushless);;
-    CANSparkMax frontRight = new CANSparkMax(kFrontRightChannel, MotorType.kBrushless);;
+    CANSparkMax frontLeft = new CANSparkMax(kFrontLeftChannel, MotorType.kBrushless);
+    CANSparkMax rearLeft = new CANSparkMax(kRearLeftChannel, MotorType.kBrushless);
+    CANSparkMax rearRight = new CANSparkMax(kRearRightChannel, MotorType.kBrushless);
+    CANSparkMax frontRight = new CANSparkMax(kFrontRightChannel, MotorType.kBrushless);
+
+    RelativeEncoder frontLeftEncoder = frontLeft.getEncoder();
+    RelativeEncoder backLeftEncoder = rearLeft.getEncoder();
+    RelativeEncoder backRightEncoder = rearRight.getEncoder();
+    RelativeEncoder frontRightEncoder = frontRight.getEncoder();
     
     WPI_TalonSRX talon1 = new WPI_TalonSRX(talon1Channel);// 
     WPI_TalonSRX talon2 = new WPI_TalonSRX(talon2Channel);// 
