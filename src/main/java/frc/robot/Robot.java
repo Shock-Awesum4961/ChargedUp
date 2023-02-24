@@ -43,8 +43,8 @@ public class Robot extends TimedRobot {
   AHRS ahrs;
   Joystick stick;
 
-  private static final String kDefaultAuto = "Default";
-  private static final String kCustomAuto = "MyAuto";
+  private static final String backwardAuto = "backward";
+  private static final String forwardAuto = "Forward";
 
   private String m_autoSelected;
   private String m_autoChargerSelected;
@@ -107,6 +107,11 @@ public class Robot extends TimedRobot {
   DigitalInput tempSwitch4 = new DigitalInput(3);
   DigitalInput tempSwitch5 = new DigitalInput(4);
   DigitalInput tempSwitch6 = new DigitalInput(5);
+
+  RelativeEncoder frontLeftEncoder;
+  RelativeEncoder backLeftEncoder;
+  RelativeEncoder backRightEncoder;
+  RelativeEncoder frontRightEncoder;
   
 
 
@@ -131,8 +136,8 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void robotInit() {
-    m_AutonChooser.setDefaultOption("Default Auto", kDefaultAuto);
-    m_AutonChooser.addOption("My Auto", kCustomAuto);
+    m_AutonChooser.setDefaultOption("Backward", backwardAuto);
+    m_AutonChooser.addOption("Forward", forwardAuto);
     SmartDashboard.putData("Auto Route", m_AutonChooser);
 
     m_AutonChargerChooser.setDefaultOption("No Charger", k_AutonNoCharger);
@@ -147,10 +152,10 @@ public class Robot extends TimedRobot {
     CANSparkMax rearRight = new CANSparkMax(kRearRightChannel, MotorType.kBrushless);
     CANSparkMax frontRight = new CANSparkMax(kFrontRightChannel, MotorType.kBrushless);
 
-    RelativeEncoder frontLeftEncoder = frontLeft.getEncoder();
-    RelativeEncoder backLeftEncoder = rearLeft.getEncoder();
-    RelativeEncoder backRightEncoder = rearRight.getEncoder();
-    RelativeEncoder frontRightEncoder = frontRight.getEncoder();
+    frontLeftEncoder = frontLeft.getEncoder();
+    backLeftEncoder = rearLeft.getEncoder();
+    backRightEncoder = rearRight.getEncoder();
+    frontRightEncoder = frontRight.getEncoder();
     
     WPI_TalonSRX talon1 = new WPI_TalonSRX(talon1Channel);// 
     WPI_TalonSRX talon2 = new WPI_TalonSRX(talon2Channel);// 
@@ -219,6 +224,8 @@ public class Robot extends TimedRobot {
         SmartDashboard.putNumber(   "QuaternionX",          ahrs.getQuaternionX());
         SmartDashboard.putNumber(   "QuaternionY",          ahrs.getQuaternionY());
         SmartDashboard.putNumber(   "QuaternionZ",          ahrs.getQuaternionZ());
+
+        SmartDashboard.putNumber("frontLeftEncoder Position: ", frontLeftEncoder.getPosition());
   }
 
   /**
@@ -237,17 +244,26 @@ public class Robot extends TimedRobot {
     m_autoChargerSelected = m_AutonChargerChooser.getSelected();
     // m_autoSelected = SmartDashboard.getString("Auto Selector", kDefaultAuto);
     System.out.println("Auto selected: " + m_autoSelected);
+    frontLeftEncoder.setPosition(0);
   }
 
   /** This function is called periodically during autonomous. */
   @Override
   public void autonomousPeriodic() {
     switch (m_autoSelected) {
-      case kCustomAuto:
+      case forwardAuto:
+        while(frontLeftEncoder.getPosition() > -50){
+          m_robotDrive.driveCartesian(-.5,0,0);
+
+        }
         // Put custom auto code here
         break;
-      case kDefaultAuto:
+      case backwardAuto:
       default:
+        while(frontLeftEncoder.getPosition() < 50){
+          m_robotDrive.driveCartesian(.5,0,0);
+
+        }
         // Put default auto code here
         break;
     }
