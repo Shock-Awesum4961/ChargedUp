@@ -80,19 +80,6 @@ public class Robot extends TimedRobot {
   private static final int driverJoystickChannel = 0;
   private static final int operatorJoystickChannel = 1;
 
-  private static final int a_button = 1;
-  private static final int b_button = 2;
-  private static final int x_button = 3;
-  private static final int y_button = 4;
-  
-  private static final int lb_button = 5;
-  private static final int rb_button = 6;
-  // private static final int lt_button = 7;
-  // private static final int rt_button = 8;
-  
-  private static final int select_button = 7;
-  private static final int start_button = 8;
-
   //Limit switches/
   /*
    * Limit claw open/close
@@ -176,6 +163,7 @@ public class Robot extends TimedRobot {
     m_robotDrive = new MecanumDrive(frontLeft, rearLeft, frontRight, rearRight);
     m_robotDrive.setDeadband(0.2);
 
+
     try {
 			/***********************************************************************
 			 * navX-MXP:
@@ -188,9 +176,11 @@ public class Robot extends TimedRobot {
 			 * 
 			 * Multiple navX-model devices on a single robot are supported.
 			 ************************************************************************/
-            ahrs = new AHRS(SPI.Port.kMXP);
-            //ahrs = new AHRS(SerialPort.Port.kMXP, SerialDataType.kProcessedData, (byte)50);
-            ahrs.enableLogging(true);
+          ahrs = new AHRS(SPI.Port.kMXP);
+            // ahrs = new AHRS(SerialPort.Port.kMXP, SerialDataType.kProcessedData, (byte)50);
+            // ahrs.enableLogging(true);
+          ahrs.calibrate();
+
         } catch (RuntimeException ex ) {
             DriverStation.reportError("Error instantiating navX MXP:  " + ex.getMessage(), true);
         }
@@ -209,6 +199,7 @@ public class Robot extends TimedRobot {
     SmartDashboard.putNumber(   "IMU_Yaw",              ahrs.getYaw());
     SmartDashboard.putNumber(   "IMU_Pitch",            ahrs.getPitch());
     SmartDashboard.putNumber(   "IMU_Roll",             ahrs.getRoll());
+
     
     /* Display tilt-corrected, Magnetometer-based heading (requires             */
     /* magnetometer calibration to be useful)                                   */
@@ -285,13 +276,6 @@ public class Robot extends TimedRobot {
       m_robotDrive.driveCartesian(driverController.getLeftY(), -driverController.getLeftX(),  -driverController.getRightX()/2);
 
     }
-    // if(driverJoystick.getY() < .1 && driverJoystick.getY() > -.1){
-    //   m_robotDrive.driveCartesian(driverJoystick.getY(), -driverJoystick.getX()/2,  -driverJoystick.getRawAxis(4)/2);
-    // }else{
-    //   m_robotDrive.driveCartesian(driverJoystick.getY(), -driverJoystick.getX(),  -driverJoystick.getRawAxis(4)/2);
-
-    // }
-
   }
 
   /** This function is called once when the robot is disabled. */
@@ -349,6 +333,7 @@ public class Robot extends TimedRobot {
         if(!(jsonTag instanceof JSONObject)){continue;}
 
         int targetID = (int)jsonTag.get("fid");
+        if(targetID == seekingTargetId){System.out.println("Found");}
       }
     } catch(Exception e){
       throw new RuntimeException(e);
