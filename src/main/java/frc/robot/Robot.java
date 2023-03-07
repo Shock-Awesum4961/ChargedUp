@@ -26,6 +26,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj.SPI;
 import com.kauailabs.navx.frc.AHRS;
+import com.ctre.phoenix.motorcontrol.ControlMode;
 import com.ctre.phoenix.motorcontrol.NeutralMode;
 import com.ctre.phoenix.motorcontrol.can.WPI_TalonSRX;
 import com.revrobotics.CANSparkMax;
@@ -72,8 +73,8 @@ public class Robot extends TimedRobot {
   private static final int kRearRightChannel = 3;
   private static final int kFrontRightChannel = 4;
   
-  private static final int talon1Channel = 5;
-  private static final int talon2Channel = 6;
+  private static final int raiseLowerChannel = 5;
+  private static final int extenderChannel = 6;
   private static final int talon3Channel = 7;
 
 
@@ -99,6 +100,10 @@ public class Robot extends TimedRobot {
   RelativeEncoder backLeftEncoder;
   RelativeEncoder backRightEncoder;
   RelativeEncoder frontRightEncoder;
+
+  WPI_TalonSRX raiseLowerTalon;
+  WPI_TalonSRX extenderTalon;
+  WPI_TalonSRX grabberTalon;
   
 
 
@@ -144,9 +149,9 @@ public class Robot extends TimedRobot {
     backRightEncoder = rearRight.getEncoder();
     frontRightEncoder = frontRight.getEncoder();
     
-    WPI_TalonSRX talon1 = new WPI_TalonSRX(talon1Channel);// 
-    WPI_TalonSRX talon2 = new WPI_TalonSRX(talon2Channel);// 
-    WPI_TalonSRX talon3 = new WPI_TalonSRX(talon3Channel);// 
+    raiseLowerTalon = new WPI_TalonSRX(raiseLowerChannel);// 
+    extenderTalon = new WPI_TalonSRX(extenderChannel);// 
+    grabberTalon = new WPI_TalonSRX(talon3Channel);// 
 
     frontLeft.setInverted(false);
     rearLeft.setInverted(false);
@@ -154,7 +159,9 @@ public class Robot extends TimedRobot {
     frontRight.setInverted(true); 
 
     // Netrual mode is HARDWARE on Sparkma
-    // frontLeft.setNeutralMode(B_MODE);
+    raiseLowerTalon.setNeutralMode(B_MODE);
+    extenderTalon.setNeutralMode(B_MODE);
+    grabberTalon.setNeutralMode(B_MODE);
     // rearLeft.setNeutralMode(B_MODE);
     // frontRight.setNeutralMode(B_MODE);
     // rearRight.setNeutralMode(B_MODE);
@@ -241,23 +248,23 @@ public class Robot extends TimedRobot {
   /** This function is called periodically during autonomous. */
   @Override
   public void autonomousPeriodic() {
-    switch (m_autoSelected) {
-      case forwardAuto:
-        while(frontLeftEncoder.getPosition() > -50){
-          m_robotDrive.driveCartesian(-.5,0,0);
+    // switch (m_autoSelected) {
+    //   case forwardAuto:
+    //     while(frontLeftEncoder.getPosition() > -50){
+    //       m_robotDrive.driveCartesian(-.5,0,0);
 
-        }
-        // Put custom auto code here
-        break;
-      case backwardAuto:
-      default:
-        while(frontLeftEncoder.getPosition() < 50){
-          m_robotDrive.driveCartesian(.5,0,0);
+    //     }
+    //     // Put custom auto code here
+    //     break;
+    //   case backwardAuto:
+    //   default:
+    //     while(frontLeftEncoder.getPosition() < 50){
+    //       m_robotDrive.driveCartesian(.5,0,0);
 
-        }
-        // Put default auto code here
-        break;
-    }
+    //     }
+    //     // Put default auto code here
+    //     break;
+    // }
   }
 
   /** This function is called once when teleop is enabled. */
@@ -276,6 +283,71 @@ public class Robot extends TimedRobot {
       m_robotDrive.driveCartesian(driverController.getLeftY(), -driverController.getLeftX(),  -driverController.getRightX()/2);
 
     }
+
+    // if(operatorController.getLeftY() < 1){
+    //   raiseLowerTalon.set(ControlMode.PercentOutput, getJoystickValue(operatorController.getLeftY()));
+    // } else {
+    //   raiseLowerTalon.set(ControlMode.PercentOutput, 8);
+
+    // }
+
+
+
+    if(operatorController.getLeftY() < -.2){
+      if(operatorController.getLeftY() < -.75){
+        raiseLowerTalon.set(ControlMode.PercentOutput, -.75);
+      } else {
+        raiseLowerTalon.set(ControlMode.PercentOutput, operatorController.getLeftY());
+      }
+    }else if(operatorController.getLeftY() > .2){
+      if(operatorController.getLeftY() > .75){
+        raiseLowerTalon.set(ControlMode.PercentOutput, .75);
+      }else {
+        raiseLowerTalon.set(ControlMode.PercentOutput, operatorController.getLeftY());
+      }
+    } else {
+      raiseLowerTalon.set(ControlMode.PercentOutput, 0);
+    }
+
+    // if(operatorController.getRightX() < -.2){
+    //   if(operatorController.getRightX() < -.75){
+    //     grabberTalon.set(ControlMode.PercentOutput, -.75);
+    //   } else {
+    //     grabberTalon.set(ControlMode.PercentOutput, operatorController.getRightX());
+    //   }
+    // }else if(operatorController.getRightX() > .2){
+    //   if(operatorController.getRightX() > .75){
+    //     grabberTalon.set(ControlMode.PercentOutput, .75);
+    //   }else {
+    //     grabberTalon.set(ControlMode.PercentOutput, operatorController.getRightX());
+    //   }
+    // } else {
+    //   grabberTalon.set(ControlMode.PercentOutput, 0);
+    // }
+    if(operatorController.getRightX() < -.2){
+      if(operatorController.getRightX() < -.75){
+        extenderTalon.set(ControlMode.PercentOutput, -.75);
+      } else {
+        extenderTalon.set(ControlMode.PercentOutput, operatorController.getRightX());
+      }
+    }else if(operatorController.getRightX() > .2){
+      if(operatorController.getRightX() > .75){
+        extenderTalon.set(ControlMode.PercentOutput, .75);
+      }else {
+        extenderTalon.set(ControlMode.PercentOutput, operatorController.getRightX());
+      }
+    } else {
+      extenderTalon.set(ControlMode.PercentOutput, 0);
+    }
+
+    if(operatorController.getRightTriggerAxis() > .15 && operatorController.getLeftTriggerAxis() < .15){
+      grabberTalon.set(ControlMode.PercentOutput, .5);
+    }
+    if(operatorController.getRightTriggerAxis() < .15 && operatorController.getLeftTriggerAxis() > .15){
+      grabberTalon.set(ControlMode.PercentOutput, -.5);
+    }
+
+
   }
 
   /** This function is called once when the robot is disabled. */
@@ -339,4 +411,9 @@ public class Robot extends TimedRobot {
       throw new RuntimeException(e);
     }
   }
+
+  public double getJoystickValue(Double stickAxisValue) {
+    if(Math.abs(stickAxisValue) < 0.15) return 0;
+    else return stickAxisValue;
+}
 }
