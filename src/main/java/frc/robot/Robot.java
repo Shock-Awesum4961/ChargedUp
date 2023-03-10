@@ -89,8 +89,8 @@ public class Robot extends TimedRobot {
    * 
    * switch at certain lengths to place game pieces
    */
-  DigitalInput tempSwitch1 = new DigitalInput(0);
-  DigitalInput tempSwitch2 = new DigitalInput(1);
+  DigitalInput stopGrabberClose = new DigitalInput(0);
+  DigitalInput stopGrabberOpen = new DigitalInput(1);
   DigitalInput tempSwitch3 = new DigitalInput(2);
   DigitalInput tempSwitch4 = new DigitalInput(3);
   DigitalInput tempSwitch5 = new DigitalInput(4);
@@ -277,8 +277,13 @@ public class Robot extends TimedRobot {
   /** This function is called periodically during operator control. */
   @Override
   public void teleopPeriodic() {
-    if(driverController.getLeftY() < .1 && driverController.getLeftY() > -.1){
-      m_robotDrive.driveCartesian(driverController.getLeftY(), -driverController.getLeftX()/2,  -driverController.getRightX()/2);
+
+    SmartDashboard.putData("limitGrabberClose", stopGrabberClose);
+    SmartDashboard.putData("tempSwitch2", stopGrabberOpen);
+
+
+    if(driverController.getLeftY() < .5 && driverController.getLeftY() > -.5){
+      m_robotDrive.driveCartesian(driverController.getLeftY(), -driverController.getLeftX()/2.5,  -driverController.getRightX()/2);
     }else{
       m_robotDrive.driveCartesian(driverController.getLeftY(), -driverController.getLeftX(),  -driverController.getRightX()/2);
 
@@ -340,11 +345,18 @@ public class Robot extends TimedRobot {
       extenderTalon.set(ControlMode.PercentOutput, 0);
     }
 
-    if(operatorController.getRightTriggerAxis() > .15 && operatorController.getLeftTriggerAxis() < .15){
-      grabberTalon.set(ControlMode.PercentOutput, .5);
-    }
-    if(operatorController.getRightTriggerAxis() < .15 && operatorController.getLeftTriggerAxis() > .15){
+    if(operatorController.getRightTriggerAxis() > .15 && 
+        operatorController.getLeftTriggerAxis() < .15 &&
+        stopGrabberClose.get()
+    ){
       grabberTalon.set(ControlMode.PercentOutput, -.5);
+    }else if(operatorController.getRightTriggerAxis() < .15 && 
+              operatorController.getLeftTriggerAxis() > .15 &&
+              stopGrabberOpen.get()){
+      grabberTalon.set(ControlMode.PercentOutput, .5);
+    } else {
+      grabberTalon.set(ControlMode.PercentOutput, 0);
+
     }
 
 
