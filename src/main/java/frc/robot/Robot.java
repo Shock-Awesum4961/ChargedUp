@@ -153,7 +153,7 @@ public class Robot extends TimedRobot {
   private static final ArrayList<Integer> cubeNodeAprilTagIds = new ArrayList<>(Arrays.asList(1,2,3,6,7,8));
   private static final ArrayList<Integer> substationAprilTagIds = new ArrayList<>(Arrays.asList(4,5));
 
-  Encoder MagEncoder;
+  // Encoder MagEncoder;
 
   /**
    * This function is run when the robot is first started up and should be used for any
@@ -206,7 +206,7 @@ public class Robot extends TimedRobot {
     m_robotDrive = new MecanumDrive(frontLeft, rearLeft, frontRight, rearRight);
     m_robotDrive.setDeadband(0.2);
 
-    MagEncoder = new Encoder(2,3, false, Encoder.EncodingType.k4X);
+    // MagEncoder = new Encoder(2,3, false, Encoder.EncodingType.k4X);
 
 
     // Nav-X
