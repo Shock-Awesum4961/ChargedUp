@@ -12,12 +12,15 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 
+import edu.wpi.first.cameraserver.CameraServer;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.DigitalInput;
 import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.Encoder;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.Timer;
@@ -45,8 +48,12 @@ public class Robot extends TimedRobot {
   AHRS ahrs;
   Joystick stick;
 
+  private final Timer grabber_close_timer = new Timer(); // timer for autonomous sequence
+
   private static final String backwardAuto = "backward";
   private static final String forwardAuto = "Forward";
+  private static final String mobilityAndChargerAuto = "mobilitycharger";
+  private static final String forwardChargerAuto = "forwardCharger";
 
   private String m_autoSelected;
   private String m_autoChargerSelected;
@@ -82,6 +89,9 @@ public class Robot extends TimedRobot {
   private static final int driverJoystickChannel = 0;
   private static final int operatorJoystickChannel = 1;
 
+  private static final boolean GRIP_OPENING = false;
+  private static final boolean GRIP_CLOSING = true;
+
   //Limit switches/
   /*
    * Limit claw open/close
@@ -90,8 +100,8 @@ public class Robot extends TimedRobot {
    * 
    * switch at certain lengths to place game pieces
    */
-  DigitalInput stopGrabberClose = new DigitalInput(0);
-  DigitalInput stopGrabberOpen = new DigitalInput(1);
+  DigitalInput gripCloseLimit = new DigitalInput(0);
+  DigitalInput gripOpenLimit = new DigitalInput(1);
   DigitalInput tempSwitch3 = new DigitalInput(2);
   DigitalInput tempSwitch4 = new DigitalInput(3);
   DigitalInput tempSwitch5 = new DigitalInput(4);
@@ -109,9 +119,23 @@ public class Robot extends TimedRobot {
 
   Boolean grabberCanOpen = true;
   Boolean grabberCanClose = true;
+  static boolean gripMem = false; //  state 
+
 
   int autonRaiseCount;
+  int autonOpenCount;
   
+  int autonStepCount;
+
+  // for grippers
+  static boolean gripDirection; // 1 for close, 0 for open
+  static boolean gripOpenOK, gripCloseOK;
+
+  static boolean passedGripCloseSensor;
+  static boolean passedGripOpenSensor;
+
+  static int gripCloseLimitCounter = 0;
+  final int gripCloseLimitCounterMax = 5;
 
 
   //Limelight
@@ -129,14 +153,20 @@ public class Robot extends TimedRobot {
   private static final ArrayList<Integer> cubeNodeAprilTagIds = new ArrayList<>(Arrays.asList(1,2,3,6,7,8));
   private static final ArrayList<Integer> substationAprilTagIds = new ArrayList<>(Arrays.asList(4,5));
 
+  Encoder MagEncoder;
+
   /**
    * This function is run when the robot is first started up and should be used for any
    * initialization code.
    */
   @Override
   public void robotInit() {
-    m_AutonChooser.setDefaultOption("Backward", backwardAuto);
-    m_AutonChooser.addOption("Forward", forwardAuto);
+    CameraServer.startAutomaticCapture();
+
+    m_AutonChooser.setDefaultOption("Forward", forwardAuto);
+    m_AutonChooser.addOption("Backward", backwardAuto);
+    m_AutonChooser.addOption("Mobility + Charger", mobilityAndChargerAuto);
+    m_AutonChooser.addOption("Score + Charger", forwardChargerAuto);
     SmartDashboard.putData("Auto Route", m_AutonChooser);
 
     m_AutonChargerChooser.setDefaultOption("No Charger", k_AutonNoCharger);
@@ -161,25 +191,25 @@ public class Robot extends TimedRobot {
     grabberTalon = new WPI_TalonSRX(talon3Channel);// 
 
     autonRaiseCount = 0;
+    gripCloseOK = false;
 
+    // Netrual mode is HARDWARE on Sparkma
     frontLeft.setInverted(false);
     rearLeft.setInverted(false);
     rearRight.setInverted(true);
     frontRight.setInverted(true); 
 
-    // Netrual mode is HARDWARE on Sparkma
     raiseLowerTalon.setNeutralMode(B_MODE);
     extenderTalon.setNeutralMode(B_MODE);
     grabberTalon.setNeutralMode(B_MODE);
-    // rearLeft.setNeutralMode(B_MODE);
-    // frontRight.setNeutralMode(B_MODE);
-    // rearRight.setNeutralMode(B_MODE);
-    // flyWheelMotor.setNeutralMode(C_MODE);
 
     m_robotDrive = new MecanumDrive(frontLeft, rearLeft, frontRight, rearRight);
     m_robotDrive.setDeadband(0.2);
 
+    MagEncoder = new Encoder(2,3, false, Encoder.EncodingType.k4X);
 
+
+    // Nav-X
     try {
 			/***********************************************************************
 			 * navX-MXP:
@@ -232,9 +262,9 @@ public class Robot extends TimedRobot {
         SmartDashboard.putNumber(   "QuaternionY",          ahrs.getQuaternionY());
         SmartDashboard.putNumber(   "QuaternionZ",          ahrs.getQuaternionZ());
 
-        SmartDashboard.putNumber("frontLeftEncoder Position: ", frontLeftEncoder.getPosition());
+        // SmartDashboard.putNumber("frontLeftEncoder Position: ", frontLeftEncoder.getPosition());
 
-        SmartDashboard.putNumber("liftEncoder",  raiseLowerTalon.getSelectedSensorPosition(0));
+        // SmartDashboard.putNumber("liftEncoder",  raiseLowerTalon.getSelectedSensorPosition(0));
 
   }
 
@@ -256,17 +286,30 @@ public class Robot extends TimedRobot {
     System.out.println("Auto selected: " + m_autoSelected);
     frontLeftEncoder.setPosition(0);
     autonRaiseCount = 0;
+    autonOpenCount = 0;
+    autonStepCount = 0;
   }
 
   /** This function is called periodically during autonomous. */
   @Override
   public void autonomousPeriodic() {
-    // switch (m_autoSelected) {
-    //   case forwardAuto:
 
+    // if(autonOpenCount < 10){
+    //   grabberTalon.set(ControlMode.PercentOutput, .5);
+    //   autonOpenCount++;
+    // }
 
-      SmartDashboard.putNumber("autonRaiseCount", autonRaiseCount);
+    m_autoSelected = forwardAuto;
+    switch (m_autoSelected) {
+      case forwardAuto:
+        forwardAuto();
+        break;
+      case backwardAuto:
+        backwardAuto();
+        // Put default auto code here
+        break;
 
+      case forwardChargerAuto :
         while(frontLeftEncoder.getPosition() > -25){
           m_robotDrive.driveCartesian(-.5,0,0);
           if(frontLeftEncoder.getPosition() > -10){
@@ -276,23 +319,62 @@ public class Robot extends TimedRobot {
 
           }
         }
-    //     // Put custom auto code here
-    //     break;
-    //   case backwardAuto:
-    //   default:
-    //     while(frontLeftEncoder.getPosition() < 50){
-    //       m_robotDrive.driveCartesian(.5,0,0);
 
-    //     }
-    //     // Put default auto code here
-    //     break;
-    // }
+        while(frontLeftEncoder.getPosition() < 25){
+          m_robotDrive.driveCartesian(.5,0,0);
+        }
+
+      break;
+      case mobilityAndChargerAuto :
+      
+      while(frontLeftEncoder.getPosition() > -35 && autonStepCount == 0){
+        m_robotDrive.driveCartesian(-.5,0,0);
+        if(frontLeftEncoder.getPosition() > -10){
+          raiseLowerTalon.set(ControlMode.PercentOutput, -.75);
+        }else{
+          raiseLowerTalon.set(ControlMode.PercentOutput, 0);
+
+        }
+      }
+
+      if(frontLeftEncoder.getPosition() <= -35){
+        autonStepCount++;
+      }
+
+      while(frontLeftEncoder.getPosition() < -10 && autonStepCount == 1){
+        m_robotDrive.driveCartesian(0,.5,0);
+      }
+
+
+      while(frontLeftEncoder.getPosition() < 10 && autonStepCount > 1){
+        m_robotDrive.driveCartesian(.5,0,0);
+      }
+
+      break;
+
+      // while(frontLeftEncoder.getPosition() < 0){
+      //   m_robotDrive.driveCartesian(0,-.5,0);
+      // }
+
+      // while(frontLeftEncoder.getPosition() < 25){
+      //   m_robotDrive.driveCartesian(.5,0,0);
+      // }
+
+      // break;
+      default:
+
+      break;
+
+    }
   }
 
   /** This function is called once when teleop is enabled. */
   @Override
   public void teleopInit() {
     m_robotDrive.setMaxOutput(.9); 
+    grabber_close_timer.reset();
+    grabber_close_timer.start();
+
 
   }
 
@@ -300,6 +382,11 @@ public class Robot extends TimedRobot {
   @Override
   public void teleopPeriodic() {
 
+    double deadbandedDriveRightX = MathUtil.applyDeadband(driverController.getRightX(),.1);
+
+    SmartDashboard.putBoolean("can gripper close:", gripCloseOK);
+    SmartDashboard.putNumber("gripCloseLimitCounter:", gripCloseLimitCounter);
+    SmartDashboard.putBoolean("gripCloseLimit.get():", gripCloseLimit.get());
 
 
 
@@ -307,13 +394,13 @@ public class Robot extends TimedRobot {
     if(driverController.getLeftY() < .5 && driverController.getLeftY() > -.5){
       m_robotDrive.driveCartesian(
         checkSlowMode(driverController.getLeftY()), 
-        -driverController.getLeftX()/2.5,  
-        checkSlowMode(-driverController.getRightX()/2));
+        0,  
+        checkSlowMode(-deadbandedDriveRightX/2));
     }else{
       m_robotDrive.driveCartesian(
         checkSlowMode(driverController.getLeftY()), 
-        checkSlowMode(-driverController.getLeftX()),  
-        -driverController.getRightX()/2);
+        0,  
+        -deadbandedDriveRightX/2);
 
     }
 
@@ -327,14 +414,14 @@ public class Robot extends TimedRobot {
 
 
     if(operatorController.getLeftY() < -.2){
-      if(operatorController.getLeftY() < -.75){
-        raiseLowerTalon.set(ControlMode.PercentOutput, -.75);
+      if(operatorController.getLeftY() < -.85){
+        raiseLowerTalon.set(ControlMode.PercentOutput, -.85);
       } else {
         raiseLowerTalon.set(ControlMode.PercentOutput, operatorController.getLeftY());
       }
     }else if(operatorController.getLeftY() > .2){
-      if(operatorController.getLeftY() > .75){
-        raiseLowerTalon.set(ControlMode.PercentOutput, .75);
+      if(operatorController.getLeftY() > .85){
+        raiseLowerTalon.set(ControlMode.PercentOutput, .85);
       }else {
         raiseLowerTalon.set(ControlMode.PercentOutput, operatorController.getLeftY());
       }
@@ -343,14 +430,14 @@ public class Robot extends TimedRobot {
     }
 
     if(operatorController.getRightY() < -.2){
-      if(operatorController.getRightY() < -.75){
-        extenderTalon.set(ControlMode.PercentOutput, -.75);
+      if(operatorController.getRightY() < -.85){
+        extenderTalon.set(ControlMode.PercentOutput, -.85);
       } else {
         extenderTalon.set(ControlMode.PercentOutput, operatorController.getRightY());
       }
     }else if(operatorController.getRightY() > .2){
-      if(operatorController.getRightY() > .75){
-        extenderTalon.set(ControlMode.PercentOutput, .75);
+      if(operatorController.getRightY() > .85){
+        extenderTalon.set(ControlMode.PercentOutput, .85);
       }else {
         extenderTalon.set(ControlMode.PercentOutput, operatorController.getRightY());
       }
@@ -358,15 +445,25 @@ public class Robot extends TimedRobot {
       extenderTalon.set(ControlMode.PercentOutput, 0);
     }
 
+
+    //Grabber
+
     if(operatorController.getRightTriggerAxis() > .15 && 
         operatorController.getLeftTriggerAxis() < .15 &&
-        stopGrabberClose.get()
-    ){
+        // gripCloseLimit.get()
+        gripCloseOK
+    ){    //Close
       grabberTalon.set(ControlMode.PercentOutput, -.5);
+      canGrabberClose();
+
+      // if(passedGripOpenSensor && !gripOpenLimit.get()){passedGripOpenSensor = false;}
     }else if(operatorController.getRightTriggerAxis() < .15 && 
-              operatorController.getLeftTriggerAxis() > .15 &&
-              stopGrabberOpen.get()){
+    operatorController.getLeftTriggerAxis() > .15 
+    ){ // Open
       grabberTalon.set(ControlMode.PercentOutput, .5);
+      gripCloseOK = true;
+      gripCloseLimitCounter = 0;
+      // if(!gripOpenLimit.get()){passedGripOpenSensor = true;}
     } else {
       grabberTalon.set(ControlMode.PercentOutput, 0);
 
@@ -377,7 +474,9 @@ public class Robot extends TimedRobot {
 
   /** This function is called once when the robot is disabled. */
   @Override
-  public void disabledInit() {}
+  public void disabledInit() {
+
+  }
 
   /** This function is called periodically when disabled. */
   @Override
@@ -442,7 +541,7 @@ public class Robot extends TimedRobot {
     else return stickAxisValue;
 }
 
-  public boolean delayedStopGrabberClose(DigitalInput limitGrabClose){
+  public boolean delayedgripCloseLimit(DigitalInput limitGrabClose){
     if(!limitGrabClose.get()){
       // wait(50);
     }
@@ -455,5 +554,88 @@ public class Robot extends TimedRobot {
       return speed / 2;
     } 
     return speed;
+  }
+  
+  // public void checkGrip(){
+  //   /******************************************************/
+  //   // Gripper Section
+  //   /******************************************************/
+  //   // if (gripOpenLimit.get())
+  //   //   gripOpenOK = false;
+
+  //   // if (!gripOpenOK && gripDirection && gripOpenLimit.get())
+  //   //   gripMem = true;
+  //   // // detect falling edge of LS to enable 
+  //   // if (gripMem && gripDirection && !gripOpenLimit.get())
+  //   // {
+  //   //   gripOpenOK = true;
+  //   //   gripMem = false;
+  //   // }
+
+  //   if (!gripCloseOK && gripDirection == GRIP_CLOSING && gripCloseLimit.get())
+  //     gripMem = true;
+
+  //   if (gripCloseLimit.get())
+  //     gripCloseOK = false; // After tiemr/pulse thing
+
+  //   if (!gripCloseOK && gripDirection == GRIP_CLOSING && gripCloseLimit.get())
+  //     gripMem = true;
+  //   // detect falling edge of LS to enable 
+  //   if (gripMem && !gripDirection && gripCloseLimit.get())
+  //   {
+  //     gripCloseOK = true;
+  //     gripMem = false;
+  //   }
+
+  // }
+
+  public boolean canGrabberClose(){
+    // Get sensor input when false
+    //When sensor is false gripper can no longer close
+
+
+    if(!gripCloseLimit.get() && gripCloseOK && gripCloseLimitCounter < 1){
+      gripCloseLimitCounter = 1;
+    } else if(gripCloseLimitCounter < gripCloseLimitCounterMax && gripCloseLimitCounter >= 1){
+      System.out.println(gripCloseLimitCounter);
+      gripCloseLimitCounter++;
+    } else if(gripCloseLimitCounter == gripCloseLimitCounterMax){
+      gripCloseOK = false;
+    } 
+
+
+
+
+
+
+
+
+    return gripCloseOK;
+  }
+
+
+  public void forwardAuto(){
+    if(frontLeftEncoder.getPosition() > -25){
+      m_robotDrive.driveCartesian(-.5,0,0);
+    }
+    
+    if(frontLeftEncoder.getPosition() > -10){
+      raiseLowerTalon.set(ControlMode.PercentOutput, -.75);
+    }else{
+      raiseLowerTalon.set(ControlMode.PercentOutput, 0);
+
+    }
+  }
+
+  public void backwardAuto(){
+    if(frontLeftEncoder.getPosition() < 25){
+      m_robotDrive.driveCartesian(.75,0,0);
+    }
+    
+    if(frontLeftEncoder.getPosition() < 10){
+      raiseLowerTalon.set(ControlMode.PercentOutput, -.75);
+    }else{
+      raiseLowerTalon.set(ControlMode.PercentOutput, 0);
+    }
   }
 }
