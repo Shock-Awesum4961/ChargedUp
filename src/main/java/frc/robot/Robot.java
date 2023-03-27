@@ -15,6 +15,7 @@ import org.json.simple.parser.JSONParser;
 import edu.wpi.first.cameraserver.CameraServer;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
+import edu.wpi.first.math.filter.SlewRateLimiter;
 import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.networktables.NetworkTableInstance;
@@ -45,8 +46,8 @@ import com.revrobotics.CANSparkMaxLowLevel.MotorType;
  * project.
  */
 public class Robot extends TimedRobot {
-  AHRS ahrs;
-  Joystick stick;
+  AHRS navxGyro;
+  Boolean fieldOriented = false;
 
   private final Timer grabber_close_timer = new Timer(); // timer for autonomous sequence
 
@@ -153,7 +154,6 @@ public class Robot extends TimedRobot {
   private static final ArrayList<Integer> cubeNodeAprilTagIds = new ArrayList<>(Arrays.asList(1,2,3,6,7,8));
   private static final ArrayList<Integer> substationAprilTagIds = new ArrayList<>(Arrays.asList(4,5));
 
-  // Encoder MagEncoder;
 
   /**
    * This function is run when the robot is first started up and should be used for any
@@ -165,13 +165,13 @@ public class Robot extends TimedRobot {
 
     m_AutonChooser.setDefaultOption("Forward", forwardAuto);
     m_AutonChooser.addOption("Backward", backwardAuto);
-    m_AutonChooser.addOption("Mobility + Charger", mobilityAndChargerAuto);
-    m_AutonChooser.addOption("Score + Charger", forwardChargerAuto);
+    // m_AutonChooser.addOption("Mobility + Charger", mobilityAndChargerAuto);
+    // m_AutonChooser.addOption("Score + Charger", forwardChargerAuto);
     SmartDashboard.putData("Auto Route", m_AutonChooser);
 
     m_AutonChargerChooser.setDefaultOption("No Charger", k_AutonNoCharger);
     m_AutonChargerChooser.addOption("Yes Charger", k_AutonYesCharger);
-    SmartDashboard.putData("Auto Charger Choice", m_AutonChargerChooser);
+    // SmartDashboard.putData("Auto Charger Choice", m_AutonChargerChooser);
 
     driverController = new XboxController(driverJoystickChannel);
     operatorController = new XboxController(operatorJoystickChannel);
@@ -204,34 +204,16 @@ public class Robot extends TimedRobot {
     grabberTalon.setNeutralMode(B_MODE);
 
     m_robotDrive = new MecanumDrive(frontLeft, rearLeft, frontRight, rearRight);
+    m_robotDrive.setMaxOutput(.85);
     m_robotDrive.setDeadband(0.2);
+
 
     // MagEncoder = new Encoder(2,3, false, Encoder.EncodingType.k4X);
 
+    navxGyro = new AHRS(SPI.Port.kMXP);
+    navxGyro.calibrate();
 
-    // Nav-X
-    try {
-			/***********************************************************************
-			 * navX-MXP:
-			 * - Communication via RoboRIO MXP (SPI, I2C, TTL UART) and USB.            
-			 * - See http://navx-mxp.kauailabs.com/guidance/selecting-an-interface.
-			 * 
-			 * navX-Micro:
-			 * - Communication via I2C (RoboRIO MXP or Onboard) and USB.
-			 * - See http://navx-micro.kauailabs.com/guidance/selecting-an-interface.
-			 * 
-			 * Multiple navX-model devices on a single robot are supported.
-			 ************************************************************************/
-          ahrs = new AHRS(SPI.Port.kMXP);
-            // ahrs = new AHRS(SerialPort.Port.kMXP, SerialDataType.kProcessedData, (byte)50);
-            // ahrs.enableLogging(true);
-          ahrs.calibrate();
-
-        } catch (RuntimeException ex ) {
-            DriverStation.reportError("Error instantiating navX MXP:  " + ex.getMessage(), true);
-        }
   }
-
   /**
    * This function is called every 20 ms, no matter the mode. Use this for items like diagnostics
    * that you want ran during disabled, autonomous, teleoperated and test.
@@ -242,25 +224,25 @@ public class Robot extends TimedRobot {
   @Override
   public void robotPeriodic() {
 
-    SmartDashboard.putNumber(   "IMU_Yaw",              ahrs.getYaw());
-    SmartDashboard.putNumber(   "IMU_Pitch",            ahrs.getPitch());
-    SmartDashboard.putNumber(   "IMU_Roll",             ahrs.getRoll());
+    SmartDashboard.putNumber(   "IMU_Yaw",              navxGyro.getYaw());
+    SmartDashboard.putNumber(   "IMU_Pitch",            navxGyro.getPitch());
+    SmartDashboard.putNumber(   "IMU_Roll",             navxGyro.getRoll());
 
     
     /* Display tilt-corrected, Magnetometer-based heading (requires             */
     /* magnetometer calibration to be useful)                                   */
     
-    SmartDashboard.putNumber(   "IMU_CompassHeading",   ahrs.getCompassHeading());
+    SmartDashboard.putNumber(   "IMU_CompassHeading",   navxGyro.getCompassHeading());
 
             /* Quaternion Data                                                          */
         /* Quaternions are fascinating, and are the most compact representation of  */
         /* orientation data.  All of the Yaw, Pitch and Roll Values can be derived  */
         /* from the Quaternions.  If interested in motion processing, knowledge of  */
         /* Quaternions is highly recommended.                                       */
-        SmartDashboard.putNumber(   "QuaternionW",          ahrs.getQuaternionW());
-        SmartDashboard.putNumber(   "QuaternionX",          ahrs.getQuaternionX());
-        SmartDashboard.putNumber(   "QuaternionY",          ahrs.getQuaternionY());
-        SmartDashboard.putNumber(   "QuaternionZ",          ahrs.getQuaternionZ());
+        SmartDashboard.putNumber(   "QuaternionW",          navxGyro.getQuaternionW());
+        SmartDashboard.putNumber(   "QuaternionX",          navxGyro.getQuaternionX());
+        SmartDashboard.putNumber(   "QuaternionY",          navxGyro.getQuaternionY());
+        SmartDashboard.putNumber(   "QuaternionZ",          navxGyro.getQuaternionZ());
 
         // SmartDashboard.putNumber("frontLeftEncoder Position: ", frontLeftEncoder.getPosition());
 
@@ -388,21 +370,51 @@ public class Robot extends TimedRobot {
     SmartDashboard.putNumber("gripCloseLimitCounter:", gripCloseLimitCounter);
     SmartDashboard.putBoolean("gripCloseLimit.get():", gripCloseLimit.get());
 
-
-
-
-    if(driverController.getLeftY() < .5 && driverController.getLeftY() > -.5){
-      m_robotDrive.driveCartesian(
-        checkSlowMode(driverController.getLeftY()), 
-        0,  
-        checkSlowMode(-deadbandedDriveRightX/2));
-    }else{
-      m_robotDrive.driveCartesian(
-        checkSlowMode(driverController.getLeftY()), 
-        0,  
-        -deadbandedDriveRightX/2);
-
+    if(driverController.getRightBumperPressed()){
+      fieldOriented = !fieldOriented;
     }
+
+    if(driverController.getYButtonPressed()){
+      navxGyro.reset()
+    }
+
+
+
+    // double driverLeftYLimitedValue = driverLeftYLimiter.calculate(driverController.getLeftY());
+    // double driverRightXLimitedValue = driverRightXLimiter.calculate(deadbandedDriveRightX);
+
+    // m_robotDrive.driveCartesian(
+    //   checkSlowMode(driverLeftYLimitedValue), 
+    //   driverLeftXLimitedValue/2.25,  
+    //   checkSlowMode(-driverRightXLimitedValue/2)
+    // );
+    if(fieldOriented){
+      m_robotDrive.driveCartesian(
+        checkSlowMode(driverController.getLeftY()), 
+        checkSlowMode(-driverController.getLeftX()/2),  
+        -deadbandedDriveRightX,
+        navxGyro.getRotation2d()
+      );
+    } else {
+      m_robotDrive.driveCartesian(
+        checkSlowMode(driverController.getLeftY()), 
+        checkSlowMode(-driverController.getLeftX()/2),  
+        -deadbandedDriveRightX
+      );
+    }
+
+    // if(driverController.getLeftY() < .5 && driverController.getLeftY() > -.5){
+    //   m_robotDrive.driveCartesian(
+    //     checkSlowMode(driverLeftYLimitedValue), 
+    //     0,  
+    //     checkSlowMode(-driverRightXLimitedValue/2));
+    // }else{
+    //   m_robotDrive.driveCartesian(
+    //     checkSlowMode(driverLeftYLimitedValue), 
+    //     0,  
+    //     -driverRightXLimitedValue/2);
+
+    // }
 
     // if(operatorController.getLeftY() < 1){
     //   raiseLowerTalon.set(ControlMode.PercentOutput, getJoystickValue(operatorController.getLeftY()));
