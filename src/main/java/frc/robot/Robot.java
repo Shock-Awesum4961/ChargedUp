@@ -47,7 +47,7 @@ import com.revrobotics.CANSparkMaxLowLevel.MotorType;
  */
 public class Robot extends TimedRobot {
   AHRS navxGyro;
-  Boolean fieldOriented = false;
+  Boolean fieldOriented;
 
   private final Timer grabber_close_timer = new Timer(); // timer for autonomous sequence
 
@@ -74,9 +74,6 @@ public class Robot extends TimedRobot {
   private MecanumDrive m_robotDrive;
   private static final NeutralMode B_MODE = NeutralMode.Brake; // Set the talons neutralmode to brake
 
-  private static final double defaultSpeed = 0.9;
-  private static final double armExtendedSpeed = 0.3;
-
   private static final int kFrontLeftChannel = 1; // TODO:: CHANGE THESE FROM LAST YEAR
   private static final int kRearLeftChannel = 2;
   private static final int kRearRightChannel = 3;
@@ -89,9 +86,6 @@ public class Robot extends TimedRobot {
 
   private static final int driverJoystickChannel = 0;
   private static final int operatorJoystickChannel = 1;
-
-  private static final boolean GRIP_OPENING = false;
-  private static final boolean GRIP_CLOSING = true;
 
   //Limit switches/
   /*
@@ -118,25 +112,10 @@ public class Robot extends TimedRobot {
   WPI_TalonSRX extenderTalon;
   WPI_TalonSRX grabberTalon;
 
-  Boolean grabberCanOpen = true;
-  Boolean grabberCanClose = true;
-  static boolean gripMem = false; //  state 
-
-
   int autonRaiseCount;
   int autonOpenCount;
   
   int autonStepCount;
-
-  // for grippers
-  static boolean gripDirection; // 1 for close, 0 for open
-  static boolean gripOpenOK, gripCloseOK;
-
-  static boolean passedGripCloseSensor;
-  static boolean passedGripOpenSensor;
-
-  static int gripCloseLimitCounter = 0;
-  final int gripCloseLimitCounterMax = 5;
 
 
   //Limelight
@@ -155,6 +134,12 @@ public class Robot extends TimedRobot {
   private static final ArrayList<Integer> substationAprilTagIds = new ArrayList<>(Arrays.asList(4,5));
 
 
+  private SlewRateLimiter driverLeftYLimiter = new SlewRateLimiter(.6);
+  private SlewRateLimiter driverLeftXimiter = new SlewRateLimiter(.3);
+  private SlewRateLimiter driverRightXLimiter = new SlewRateLimiter(.3);
+
+  private double driverLeftYLimited;
+  private double driverRightXLimited;
   /**
    * This function is run when the robot is first started up and should be used for any
    * initialization code.
@@ -191,7 +176,6 @@ public class Robot extends TimedRobot {
     grabberTalon = new WPI_TalonSRX(talon3Channel);// 
 
     autonRaiseCount = 0;
-    gripCloseOK = false;
 
     // Netrual mode is HARDWARE on Sparkma
     frontLeft.setInverted(false);
@@ -213,6 +197,8 @@ public class Robot extends TimedRobot {
     navxGyro = new AHRS(SPI.Port.kMXP);
     navxGyro.calibrate();
 
+    fieldOriented = true;
+
   }
   /**
    * This function is called every 20 ms, no matter the mode. Use this for items like diagnostics
@@ -223,31 +209,9 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void robotPeriodic() {
-
-    SmartDashboard.putNumber(   "IMU_Yaw",              navxGyro.getYaw());
-    SmartDashboard.putNumber(   "IMU_Pitch",            navxGyro.getPitch());
-    SmartDashboard.putNumber(   "IMU_Roll",             navxGyro.getRoll());
-
-    
-    /* Display tilt-corrected, Magnetometer-based heading (requires             */
-    /* magnetometer calibration to be useful)                                   */
-    
-    SmartDashboard.putNumber(   "IMU_CompassHeading",   navxGyro.getCompassHeading());
-
-            /* Quaternion Data                                                          */
-        /* Quaternions are fascinating, and are the most compact representation of  */
-        /* orientation data.  All of the Yaw, Pitch and Roll Values can be derived  */
-        /* from the Quaternions.  If interested in motion processing, knowledge of  */
-        /* Quaternions is highly recommended.                                       */
-        SmartDashboard.putNumber(   "QuaternionW",          navxGyro.getQuaternionW());
-        SmartDashboard.putNumber(   "QuaternionX",          navxGyro.getQuaternionX());
-        SmartDashboard.putNumber(   "QuaternionY",          navxGyro.getQuaternionY());
-        SmartDashboard.putNumber(   "QuaternionZ",          navxGyro.getQuaternionZ());
-
-        // SmartDashboard.putNumber("frontLeftEncoder Position: ", frontLeftEncoder.getPosition());
-
-        // SmartDashboard.putNumber("liftEncoder",  raiseLowerTalon.getSelectedSensorPosition(0));
-
+    SmartDashboard.putBoolean("FieldOriented", fieldOriented);
+    driverLeftYLimited = driverLeftYLimiter.calculate(driverController.getLeftY());
+    driverRightXLimited = driverRightXLimiter.calculate(driverController.getLeftY());
   }
 
   /**
@@ -265,7 +229,6 @@ public class Robot extends TimedRobot {
     m_autoSelected = m_AutonChooser.getSelected();
     m_autoChargerSelected = m_AutonChargerChooser.getSelected();
     // m_autoSelected = SmartDashboard.getString("Auto Selector", kDefaultAuto);
-    System.out.println("Auto selected: " + m_autoSelected);
     frontLeftEncoder.setPosition(0);
     autonRaiseCount = 0;
     autonOpenCount = 0;
@@ -366,42 +329,43 @@ public class Robot extends TimedRobot {
 
     double deadbandedDriveRightX = MathUtil.applyDeadband(driverController.getRightX(),.1);
 
-    SmartDashboard.putBoolean("can gripper close:", gripCloseOK);
-    SmartDashboard.putNumber("gripCloseLimitCounter:", gripCloseLimitCounter);
-    SmartDashboard.putBoolean("gripCloseLimit.get():", gripCloseLimit.get());
-
     if(driverController.getRightBumperPressed()){
       fieldOriented = !fieldOriented;
     }
 
     if(driverController.getYButtonPressed()){
-      navxGyro.reset()
+      navxGyro.reset();
     }
 
 
-
     // double driverLeftYLimitedValue = driverLeftYLimiter.calculate(driverController.getLeftY());
-    // double driverRightXLimitedValue = driverRightXLimiter.calculate(deadbandedDriveRightX);
+    // // double driverRightXLimitedValue = driverRightXLimiter.calculate(deadbandedDriveRightX);
+    // if(getJoystickValue(driverController.getLeftY()) == 0){
+    //   driverLeftYLimitedValue = 0;
+    // }
+    
 
-    // m_robotDrive.driveCartesian(
-    //   checkSlowMode(driverLeftYLimitedValue), 
-    //   driverLeftXLimitedValue/2.25,  
-    //   checkSlowMode(-driverRightXLimitedValue/2)
-    // );
+
     if(fieldOriented){
       m_robotDrive.driveCartesian(
-        checkSlowMode(driverController.getLeftY()), 
-        checkSlowMode(-driverController.getLeftX()/2),  
-        -deadbandedDriveRightX,
+        checkSlowMode(rampInput(driverController.getLeftY(),driverLeftYLimited)), 
+        checkSlowMode(-driverController.getLeftX()/1.75),  
+        rampInput(-deadbandedDriveRightX, driverRightXLimited),
         navxGyro.getRotation2d()
       );
     } else {
       m_robotDrive.driveCartesian(
-        checkSlowMode(driverController.getLeftY()), 
-        checkSlowMode(-driverController.getLeftX()/2),  
-        -deadbandedDriveRightX
+        checkSlowMode(rampInput(driverController.getLeftY(),driverLeftYLimited)), 
+        checkSlowMode(-driverController.getLeftX()/1.75),  
+        rampInput(-deadbandedDriveRightX, driverRightXLimited)
       );
     }
+
+      // m_robotDrive.driveCartesian(
+      //   driverController.getLeftY(), 
+      //   -driverController.getLeftX(),  
+      //   -deadbandedDriveRightX
+      // );
 
     // if(driverController.getLeftY() < .5 && driverController.getLeftY() > -.5){
     //   m_robotDrive.driveCartesian(
@@ -461,20 +425,16 @@ public class Robot extends TimedRobot {
     //Grabber
 
     if(operatorController.getRightTriggerAxis() > .15 && 
-        operatorController.getLeftTriggerAxis() < .15 &&
+        operatorController.getLeftTriggerAxis() < .15
         // gripCloseLimit.get()
-        gripCloseOK
     ){    //Close
-      grabberTalon.set(ControlMode.PercentOutput, -.5);
-      canGrabberClose();
+      grabberTalon.set(ControlMode.PercentOutput, -.7);
 
       // if(passedGripOpenSensor && !gripOpenLimit.get()){passedGripOpenSensor = false;}
     }else if(operatorController.getRightTriggerAxis() < .15 && 
     operatorController.getLeftTriggerAxis() > .15 
     ){ // Open
-      grabberTalon.set(ControlMode.PercentOutput, .5);
-      gripCloseOK = true;
-      gripCloseLimitCounter = 0;
+      grabberTalon.set(ControlMode.PercentOutput, .7);
       // if(!gripOpenLimit.get()){passedGripOpenSensor = true;}
     } else {
       grabberTalon.set(ControlMode.PercentOutput, 0);
@@ -553,14 +513,6 @@ public class Robot extends TimedRobot {
     else return stickAxisValue;
 }
 
-  public boolean delayedgripCloseLimit(DigitalInput limitGrabClose){
-    if(!limitGrabClose.get()){
-      // wait(50);
-    }
-    return limitGrabClose.get();
-
-  }
-
   public Double checkSlowMode(Double speed){
     if(driverController.getLeftBumper()){
       return speed / 2;
@@ -568,64 +520,6 @@ public class Robot extends TimedRobot {
     return speed;
   }
   
-  // public void checkGrip(){
-  //   /******************************************************/
-  //   // Gripper Section
-  //   /******************************************************/
-  //   // if (gripOpenLimit.get())
-  //   //   gripOpenOK = false;
-
-  //   // if (!gripOpenOK && gripDirection && gripOpenLimit.get())
-  //   //   gripMem = true;
-  //   // // detect falling edge of LS to enable 
-  //   // if (gripMem && gripDirection && !gripOpenLimit.get())
-  //   // {
-  //   //   gripOpenOK = true;
-  //   //   gripMem = false;
-  //   // }
-
-  //   if (!gripCloseOK && gripDirection == GRIP_CLOSING && gripCloseLimit.get())
-  //     gripMem = true;
-
-  //   if (gripCloseLimit.get())
-  //     gripCloseOK = false; // After tiemr/pulse thing
-
-  //   if (!gripCloseOK && gripDirection == GRIP_CLOSING && gripCloseLimit.get())
-  //     gripMem = true;
-  //   // detect falling edge of LS to enable 
-  //   if (gripMem && !gripDirection && gripCloseLimit.get())
-  //   {
-  //     gripCloseOK = true;
-  //     gripMem = false;
-  //   }
-
-  // }
-
-  public boolean canGrabberClose(){
-    // Get sensor input when false
-    //When sensor is false gripper can no longer close
-
-
-    if(!gripCloseLimit.get() && gripCloseOK && gripCloseLimitCounter < 1){
-      gripCloseLimitCounter = 1;
-    } else if(gripCloseLimitCounter < gripCloseLimitCounterMax && gripCloseLimitCounter >= 1){
-      System.out.println(gripCloseLimitCounter);
-      gripCloseLimitCounter++;
-    } else if(gripCloseLimitCounter == gripCloseLimitCounterMax){
-      gripCloseOK = false;
-    } 
-
-
-
-
-
-
-
-
-    return gripCloseOK;
-  }
-
-
   public void forwardAuto(){
     if(frontLeftEncoder.getPosition() > -25){
       m_robotDrive.driveCartesian(-.5,0,0);
@@ -649,5 +543,16 @@ public class Robot extends TimedRobot {
     }else{
       raiseLowerTalon.set(ControlMode.PercentOutput, 0);
     }
+  }
+
+  public double rampInput(double input, double limitedInput){
+    double setLimited = limitedInput;
+    double change = input - setLimited;
+    double limit = .4;
+    if (change>limit) {change = limit;}
+    else if( change<-limit){ change = -limit; }
+    setLimited += change;
+
+    return setLimited;
   }
 }
